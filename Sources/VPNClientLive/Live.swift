@@ -43,6 +43,21 @@ extension VPNClient: DependencyKey {
 						continuation.finish()
 					}
 				}
+			},
+			currentStatus: {
+				await vpnActor.currentStatus()
+			},
+			isConnected: {
+				await vpnActor.isConnected()
+			},
+			currentServer: {
+				await vpnActor.currentServer()
+			},
+			currentProtocol: {
+				await vpnActor.currentProtocol()
+			},
+			connectionStats: {
+				await vpnActor.connectionStats()
 			}
 		)
 	}()

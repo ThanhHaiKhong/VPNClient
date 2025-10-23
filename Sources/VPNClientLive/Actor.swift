@@ -66,6 +66,31 @@ public actor VPNActor: Sendable {
 		let manager = await getManager()
 		return await manager.statusStream()
 	}
+
+	public func currentStatus() async -> VPNClient.Status {
+		let manager = await getManager()
+		return await manager.currentStatus()
+	}
+
+	public func isConnected() async -> Bool {
+		let manager = await getManager()
+		return await manager.isConnected()
+	}
+
+	public func currentServer() async -> VPNClient.Server? {
+		let manager = await getManager()
+		return await manager.currentServer()
+	}
+
+	public func currentProtocol() async -> VPNClient.`Protocol`? {
+		let manager = await getManager()
+		return await manager.currentProtocol()
+	}
+
+	public func connectionStats() async -> VPNClient.ConnectionStats? {
+		let manager = await getManager()
+		return await manager.connectionStats()
+	}
 }
 
 @MainActor
@@ -90,7 +115,9 @@ final internal class VPNManager: @unchecked Sendable {
 	}
 
 	private var statusContinuations: [ContinuationWrapper] = []
-	private var currentProvider: (any VPNProvider & Sendable)?
+	private var currentProvider: (any SuperVPNKit.VPNProvider & Sendable)?
+	private var currentConnectionInfo: (server: VPNClient.Server, protocol: VPNClient.`Protocol`)?
+	private var connectionStartTime: Date?
 
 	init() {
 
@@ -151,8 +178,12 @@ final internal class VPNManager: @unchecked Sendable {
 			try await provider.loadConfiguration()
 			try await provider.connect(with: serverConfiguration)
 
+			currentConnectionInfo = (server, `protocol`)
+			connectionStartTime = Date()
 			status = .connection(.connected(server: server, protocol: `protocol`))
 		} catch {
+			currentConnectionInfo = nil
+			connectionStartTime = nil
 			status = .connection(.failed(error: error.localizedDescription, lastServer: server))
 			throw error
 		}
@@ -168,10 +199,14 @@ final internal class VPNManager: @unchecked Sendable {
 		do {
 			try await provider.disconnect()
 			currentProvider = nil
+			currentConnectionInfo = nil
+			connectionStartTime = nil
 			status = .connection(.disconnected)
 		} catch {
 			// Even if disconnect fails, clear the provider
 			currentProvider = nil
+			currentConnectionInfo = nil
+			connectionStartTime = nil
 			status = .connection(.disconnected)
 			throw error
 		}
@@ -200,17 +235,58 @@ final internal class VPNManager: @unchecked Sendable {
 			try await provider.loadConfiguration()
 			try await provider.connect(with: serverConfiguration)
 
+			currentConnectionInfo = (server, `protocol`)
+			connectionStartTime = Date()
 			status = .connection(.connected(server: server, protocol: `protocol`))
 		} catch {
+			currentConnectionInfo = nil
+			connectionStartTime = nil
 			status = .connection(.failed(error: error.localizedDescription, lastServer: server))
 			throw error
 		}
 	}
 
+	func currentStatus() async -> VPNClient.Status {
+		status
+	}
+
+	func isConnected() async -> Bool {
+		status.isConnected
+	}
+
+	func currentServer() async -> VPNClient.Server? {
+		currentConnectionInfo?.server
+	}
+
+	func currentProtocol() async -> VPNClient.`Protocol`? {
+		currentConnectionInfo?.protocol
+	}
+
+	func connectionStats() async -> VPNClient.ConnectionStats? {
+		guard let connectionInfo = currentConnectionInfo,
+			  let startTime = connectionStartTime,
+			  let provider = currentProvider,
+			  status.isConnected else {
+			return nil
+		}
+
+		// Get data count from provider (available for OpenVPN via TunnelKit)
+		// TunnelKit updates data counts every 3 seconds via dataCountInterval
+		let dataCount = provider.getDataCount()
+		let bytesSent = dataCount?.sent ?? 0
+		let bytesReceived = dataCount?.received ?? 0
+
+		return VPNClient.ConnectionStats(
+			bytesSent: bytesSent,
+			bytesReceived: bytesReceived,
+			connectedAt: startTime
+		)
+	}
+
 	private func createProvider(
 		with protocol: VPNClient.`Protocol`,
 		configuration: VPNClient.Configuration
-	) -> any VPNProvider & Sendable {
+	) -> any SuperVPNKit.VPNProvider & Sendable {
 		if `protocol`.rawValue == String.openvpn {
 			guard let appGroup = configuration.appGroup,
 				  let bundleIdentifier = configuration.bundleIdentifier else {

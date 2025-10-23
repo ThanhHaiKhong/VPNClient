@@ -9,6 +9,10 @@
 import SuperVPNKit
 import SwiftUI
 
+extension VPNClient {
+	public typealias Server = VpnCoreKit.ServerInfo
+}
+
 // MARK: - Configuration
 
 extension VPNClient {
@@ -222,6 +226,65 @@ extension VPNClient {
 	}
 }
 
+// MARK: - Connection Statistics
+
+extension VPNClient {
+	/// Statistics about the current VPN connection
+	public struct ConnectionStats: Sendable, Equatable {
+		/// Total bytes sent through VPN
+		public let bytesSent: UInt64
+
+		/// Total bytes received through VPN
+		public let bytesReceived: UInt64
+
+		/// Connection start time
+		public let connectedAt: Date
+
+		/// Current connection duration
+		public var duration: TimeInterval {
+			Date().timeIntervalSince(connectedAt)
+		}
+
+		public init(
+			bytesSent: UInt64,
+			bytesReceived: UInt64,
+			connectedAt: Date
+		) {
+			self.bytesSent = bytesSent
+			self.bytesReceived = bytesReceived
+			self.connectedAt = connectedAt
+		}
+
+		/// Format bytes to human-readable string
+		public func formattedBytes(_ bytes: UInt64) -> String {
+			let formatter = ByteCountFormatter()
+			formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
+			formatter.countStyle = .binary
+			return formatter.string(fromByteCount: Int64(bytes))
+		}
+
+		public var formattedBytesSent: String {
+			formattedBytes(bytesSent)
+		}
+
+		public var formattedBytesReceived: String {
+			formattedBytes(bytesReceived)
+		}
+
+		public var formattedDuration: String {
+			let hours = Int(duration) / 3600
+			let minutes = (Int(duration) % 3600) / 60
+			let seconds = Int(duration) % 60
+
+			if hours > 0 {
+				return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+			} else {
+				return String(format: "%02d:%02d", minutes, seconds)
+			}
+		}
+	}
+}
+
 // MARK: - VPNError
 
 extension VPNClient {
@@ -230,7 +293,8 @@ extension VPNClient {
 		case connectionFailed(reason: String)
 		case disconnectionFailed(reason: String)
 		case apiError(VpnAPIError)
-		
+		case notConnected
+
 		public var errorDescription: String? {
 			switch self {
 			case .configurationNotFound:
@@ -241,6 +305,8 @@ extension VPNClient {
 				return "Disconnection failed: \(reason)"
 			case .apiError(let apiError):
 				return apiError.errorDescription
+			case .notConnected:
+				return "Not connected to any VPN server."
 			}
 		}
 	}
