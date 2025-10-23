@@ -13,6 +13,10 @@ extension VPNClient {
 	public typealias Server = VpnCoreKit.ServerInfo
 }
 
+extension VpnCoreKit.ServerInfo: @unchecked @retroactive Sendable {
+	
+}
+
 // MARK: - Configuration
 
 extension VPNClient {

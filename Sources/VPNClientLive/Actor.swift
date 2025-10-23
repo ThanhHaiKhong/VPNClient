@@ -313,10 +313,6 @@ final internal class VPNManager: @unchecked Sendable {
 	}
 }
 
-extension VpnCoreKit.ServerInfo: @unchecked @retroactive Sendable {
-
-}
-
 extension VpnCoreKit.ServerConfiguration: @unchecked @retroactive Sendable {
 
 }
