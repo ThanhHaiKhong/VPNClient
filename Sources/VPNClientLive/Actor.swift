@@ -263,8 +263,7 @@ final internal class VPNManager: @unchecked Sendable {
 	}
 
 	func connectionStats() async -> VPNClient.ConnectionStats? {
-		guard let connectionInfo = currentConnectionInfo,
-			  let startTime = connectionStartTime,
+		guard let startTime = connectionStartTime,
 			  let provider = currentProvider,
 			  status.isConnected else {
 			return nil
@@ -333,4 +332,3 @@ extension SuperVPNKit.OpenVPNProvider: @unchecked @retroactive Sendable {
 extension SuperVPNKit.IKEv2Provider: @unchecked @retroactive Sendable {
 
 }
-
