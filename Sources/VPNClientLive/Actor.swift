@@ -98,8 +98,12 @@ final internal class VPNManager: @unchecked Sendable {
 	private let vpnAPI = VpnCoreKit.VpnAPI.shared
 	private var status: VPNClient.Status = .idle {
 		didSet {
-			// Notify all active continuations
 			for wrapper in statusContinuations {
+				#if DEBUG
+				print("\n====================================================================")
+				print(" - VPN_CLIENT_YIELDING_STATUS: \(status)")
+				print("====================================================================")
+				#endif
 				wrapper.continuation.yield(status)
 			}
 		}
@@ -124,19 +128,15 @@ final internal class VPNManager: @unchecked Sendable {
 	}
 	
 	func servers() async throws -> [VPNClient.Server] {
-		status = .loadingServers
+		status = .loading(.servers)
 		let result = await vpnAPI.getServers()
 		switch result {
 		case .success(let servers):
-			// Return to connection status or idle
-			if currentProvider != nil {
-				// Keep current connection status
-			} else {
-				status = .idle
-			}
+			status = .loading(.loadedServers(count: servers.count))
 			return servers
 		case .failure(let vpnAPIError):
-			status = .idle
+			let errorMessage = vpnAPIError.localizedDescription
+			status = .loading(.failedServers(error: errorMessage))
 			throw VPNClient.Error.apiError(vpnAPIError)
 		}
 	}

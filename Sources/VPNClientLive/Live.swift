@@ -34,15 +34,7 @@ extension VPNClient: DependencyKey {
 				)
 			},
 			status: {
-				AsyncStream { continuation in
-					Task {
-						let stream = await vpnActor.statusStream()
-						for await status in stream {
-							continuation.yield(status)
-						}
-						continuation.finish()
-					}
-				}
+				await vpnActor.statusStream()
 			},
 			currentStatus: {
 				await vpnActor.currentStatus()

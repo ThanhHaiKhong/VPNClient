@@ -47,4 +47,3 @@ public struct VPNClient: Sendable {
 	/// Get connection statistics (bytes sent/received, connection duration, etc.)
 	public var connectionStats: @Sendable () async -> VPNClient.ConnectionStats? = { nil }
 }
-

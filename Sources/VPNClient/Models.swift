@@ -6,7 +6,6 @@
 //
 
 @preconcurrency import VpnCoreKit
-import SuperVPNKit
 import SwiftUI
 
 extension VPNClient {
@@ -14,7 +13,11 @@ extension VPNClient {
 }
 
 extension VpnCoreKit.ServerInfo: @unchecked @retroactive Sendable {
-	
+
+}
+
+extension VpnCoreKit.ServerInfo: @retroactive Identifiable {
+	// ServerInfo already has an 'id' property, so just declare conformance
 }
 
 // MARK: - Configuration
@@ -168,21 +171,77 @@ extension VPNClient {
 	}
 }
 
+// MARK: - Loading Status
+
+extension VPNClient {
+	// Represents the loading state of various VPN client resources
+	public enum LoadingStatus: Sendable, Equatable {
+		case servers // Loading server list from API
+		case loadedServers(count: Int) // Successfully loaded server list
+		case failedServers(error: String) // Failed to load server list
+
+		public var title: String {
+			switch self {
+			case .servers:
+				return "Loading Servers..."
+			case .loadedServers(let count):
+				return "Loaded \(count) Servers"
+			case .failedServers:
+				return "Failed to Load Servers"
+			}
+		}
+
+		public var description: String {
+			switch self {
+			case .servers:
+				return "Fetching server list from API"
+			case .loadedServers(let count):
+				return "Successfully loaded \(count) servers"
+			case .failedServers(let error):
+				return "Failed to load servers: \(error)"
+			}
+		}
+
+		public var isLoadingInProgress: Bool {
+			switch self {
+			case .servers:
+				return true
+			case .loadedServers, .failedServers:
+				return false
+			}
+		}
+
+		public var isFailed: Bool {
+			if case .failedServers = self {
+				return true
+			}
+			return false
+		}
+
+		public var error: String? {
+			if case .failedServers(let error) = self {
+				return error
+			}
+			return nil
+		}
+	}
+}
+
 // MARK: - Overall Status
 
 extension VPNClient {
 	// Represents the overall state of the VPN client, including UI and connection states
 	public enum Status: Sendable, Equatable {
 		case idle // Initial state
-		case loadingServers // Loading server list from API
+		case loading(LoadingStatus) // Loading various resources
 		case connection(ConnectionStatus) // Connection-related status
 
 		public var title: String {
 			switch self {
 			case .idle:
 				return "Ready"
-			case .loadingServers:
-				return "Loading Servers..."
+			case .loading(let loadingStatus):
+				return loadingStatus.title
 			case .connection(let connectionStatus):
 				return connectionStatus.title
 			}
@@ -192,11 +251,25 @@ extension VPNClient {
 			switch self {
 			case .idle:
 				return .blue
-			case .loadingServers:
+			case .loading:
 				return .blue
 			case .connection(let connectionStatus):
 				return connectionStatus.color
 			}
+		}
+
+		public var isLoading: Bool {
+			if case .loading = self {
+				return true
+			}
+			return false
+		}
+
+		public var loadingStatus: LoadingStatus? {
+			if case .loading(let loadingStatus) = self {
+				return loadingStatus
+			}
+			return nil
 		}
 
 		public var isConnected: Bool {
