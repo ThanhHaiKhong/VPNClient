@@ -87,9 +87,9 @@ public actor VPNActor: Sendable {
 		return await manager.currentProtocol()
 	}
 
-	public func connectionStats() async -> VPNClient.ConnectionStats? {
+	public func connectionStats() async -> AsyncStream<VPNClient.ConnectionStats> {
 		let manager = await getManager()
-		return await manager.connectionStats()
+		return await manager.connectionStatsStream()
 	}
 }
 
@@ -262,24 +262,42 @@ final internal class VPNManager: @unchecked Sendable {
 		currentConnectionInfo?.protocol
 	}
 
-	func connectionStats() async -> VPNClient.ConnectionStats? {
-		guard let startTime = connectionStartTime,
-			  let provider = currentProvider,
-			  status.isConnected else {
-			return nil
+	func connectionStatsStream() -> AsyncStream<VPNClient.ConnectionStats> {
+		AsyncStream { continuation in
+			let task = Task { @MainActor in
+				// Update interval: 1 second for smooth real-time updates
+				let updateInterval: UInt64 = 1_000_000_000 // 1 second in nanoseconds
+
+				while !Task.isCancelled {
+					// Only yield stats if we're connected
+					if let startTime = self.connectionStartTime,
+					   let provider = self.currentProvider,
+					   self.status.isConnected {
+
+						// Get data count from provider (available for OpenVPN via TunnelKit)
+						// TunnelKit updates data counts every 3 seconds via dataCountInterval
+						let dataCount = provider.getDataCount()
+						let bytesSent = dataCount?.sent ?? 0
+						let bytesReceived = dataCount?.received ?? 0
+
+						let stats = VPNClient.ConnectionStats(
+							bytesSent: bytesSent,
+							bytesReceived: bytesReceived,
+							connectedAt: startTime
+						)
+
+						continuation.yield(stats)
+					}
+
+					// Wait before next update
+					try? await Task.sleep(nanoseconds: updateInterval)
+				}
+			}
+
+			continuation.onTermination = { _ in
+				task.cancel()
+			}
 		}
-
-		// Get data count from provider (available for OpenVPN via TunnelKit)
-		// TunnelKit updates data counts every 3 seconds via dataCountInterval
-		let dataCount = provider.getDataCount()
-		let bytesSent = dataCount?.sent ?? 0
-		let bytesReceived = dataCount?.received ?? 0
-
-		return VPNClient.ConnectionStats(
-			bytesSent: bytesSent,
-			bytesReceived: bytesReceived,
-			connectedAt: startTime
-		)
 	}
 
 	private func createProvider(
