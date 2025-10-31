@@ -14,7 +14,8 @@ let package = Package(
     ],
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", branch: "main"),
-		.package(url: "https://github.com/ThanhHaiKhong/SuperVPNKit.git", branch: "master")
+//		.package(url: "https://github.com/ThanhHaiKhong/SuperVPNKit.git", branch: "master")
+		.package(path: "/Users/thanhhaikhong/Desktop/AppExample/SuperVPNKit")
 	],
     targets: [
         .target(

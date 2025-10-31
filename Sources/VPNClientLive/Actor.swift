@@ -264,19 +264,42 @@ final internal class VPNManager: @unchecked Sendable {
 
 	func connectionStatsStream() -> AsyncStream<VPNClient.ConnectionStats> {
 		AsyncStream { continuation in
+			#if DEBUG
+			print("📊 [VPNManager] connectionStatsStream created")
+			#endif
+
 			let task = Task { @MainActor in
 				// Update interval: 1 second for smooth real-time updates
 				let updateInterval: UInt64 = 1_000_000_000 // 1 second in nanoseconds
 
+				#if DEBUG
+				print("📊 [VPNManager] Starting stats stream loop")
+				#endif
+
 				while !Task.isCancelled {
+					#if DEBUG
+					print("📊 [VPNManager] Stats stream tick - connectionStartTime: \(self.connectionStartTime != nil), currentProvider: \(self.currentProvider != nil), isConnected: \(self.status.isConnected)")
+					#endif
+
 					// Only yield stats if we're connected
 					if let startTime = self.connectionStartTime,
 					   let provider = self.currentProvider,
 					   self.status.isConnected {
 
-						// Get data count from provider (available for OpenVPN via TunnelKit)
-						// TunnelKit updates data counts every 3 seconds via dataCountInterval
+						#if DEBUG
+						print("📊 [VPNManager] All conditions met, calling getDataCount()")
+						#endif
+
 						let dataCount = provider.getDataCount()
+
+						#if DEBUG
+						if let dataCount = dataCount {
+							print("📊 [VPNManager] Data count from provider: received=\(dataCount.received), sent=\(dataCount.sent)")
+						} else {
+							print("⚠️ [VPNManager] Data count is nil - provider.getDataCount() returned nil")
+						}
+						#endif
+
 						let bytesSent = dataCount?.sent ?? 0
 						let bytesReceived = dataCount?.received ?? 0
 
@@ -286,7 +309,15 @@ final internal class VPNManager: @unchecked Sendable {
 							connectedAt: startTime
 						)
 
+						#if DEBUG
+						print("📊 [VPNManager] Yielding stats: sent=\(bytesSent), received=\(bytesReceived)")
+						#endif
+
 						continuation.yield(stats)
+					} else {
+						#if DEBUG
+						print("⚠️ [VPNManager] Conditions not met - skipping stats update")
+						#endif
 					}
 
 					// Wait before next update
@@ -295,6 +326,9 @@ final internal class VPNManager: @unchecked Sendable {
 			}
 
 			continuation.onTermination = { _ in
+				#if DEBUG
+				print("📊 [VPNManager] Stats stream terminated")
+				#endif
 				task.cancel()
 			}
 		}

@@ -1,5 +1,5 @@
 {
-  "originHash" : "e42ade7cf055fb339d699d17ecaffb034fabbcc9899140f83df955ea2aa30a10",
+  "originHash" : "76e7575b091d6cfd4af03ca67e012ad56e1b557354fbd17ec5074df08666030b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "93a055021f02f1395a539dd418997699fdcfa86a",
         "version" : "3.5.500"
-      }
-    },
-    {
-      "identity" : "supervpnkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ThanhHaiKhong/SuperVPNKit.git",
-      "state" : {
-        "branch" : "master",
-        "revision" : "4d3f331df44d25cd2cc1a3470cc404be8115d6df"
       }
     },
     {
