@@ -9,6 +9,7 @@ import VPNClient
 import SuperVPNKit
 import VpnCoreKit
 import Foundation
+import NetworkExtension
 
 public actor VPNActor: Sendable {
 	private var manager: VPNManager?
@@ -122,9 +123,14 @@ final internal class VPNManager: @unchecked Sendable {
 	private var currentProvider: (any SuperVPNKit.VPNProvider & Sendable)?
 	private var currentConnectionInfo: (server: VPNClient.Server, protocol: VPNClient.`Protocol`)?
 	private var connectionStartTime: Date?
+	private let appGroupIdentifier = "group.C77T3ALUS5.com.orlproducts.vpnpro"
+	private let bundleIdentifier = "com.orlproducts.vpnpro.extension"
 
 	init() {
-
+		// Sync with system VPN status on initialization
+		Task { @MainActor in
+			await self.syncWithSystemStatus()
+		}
 	}
 	
 	func servers() async throws -> [VPNClient.Server] {
@@ -332,6 +338,173 @@ final internal class VPNManager: @unchecked Sendable {
 				task.cancel()
 			}
 		}
+	}
+
+	// MARK: - System Status Sync
+
+	private func syncWithSystemStatus() async {
+		#if DEBUG
+		print("🔄 [VPNManager] Syncing with system VPN status...")
+		#endif
+
+		do {
+			// Load all VPN managers from system preferences
+			let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+
+			// Find our VPN manager by bundle identifier
+			guard let vpnManager = managers.first(where: { manager in
+				guard let proto = manager.protocolConfiguration as? NETunnelProviderProtocol else { return false }
+				return proto.providerBundleIdentifier == bundleIdentifier
+			}) else {
+				#if DEBUG
+				print("ℹ️ [VPNManager] No VPN configuration found, setting status to disconnected")
+				#endif
+				status = .connection(.disconnected)
+				return
+			}
+
+			let connectionStatus = vpnManager.connection.status
+
+			#if DEBUG
+			print("📱 [VPNManager] System VPN Status: \(connectionStatus.rawValue)")
+			#endif
+
+			// Try to retrieve last connected server info
+			let serverInfo = retrieveLastConnectedServer()
+
+			// Map NEVPNStatus to VPNClient.Status
+			switch connectionStatus {
+			case .connected:
+				if let serverInfo = serverInfo {
+					#if DEBUG
+					print("✅ [VPNManager] VPN is connected to \(serverInfo.server.name)")
+					#endif
+
+					// Create provider to maintain connection info
+					let configuration = VPNClient.Configuration(
+						appGroup: appGroupIdentifier,
+						bundleIdentifier: bundleIdentifier
+					)
+					currentProvider = createProvider(with: serverInfo.protocol, configuration: configuration)
+					currentConnectionInfo = (serverInfo.server, serverInfo.protocol)
+
+					// Estimate connection start time (or retrieve if saved)
+					connectionStartTime = vpnManager.connection.connectedDate ?? Date()
+
+					status = .connection(.connected(server: serverInfo.server, protocol: serverInfo.protocol))
+				} else {
+					#if DEBUG
+					print("⚠️ [VPNManager] VPN is connected but no server info found")
+					#endif
+					status = .connection(.disconnected)
+				}
+
+			case .connecting:
+				if let serverInfo = serverInfo {
+					#if DEBUG
+					print("🔄 [VPNManager] VPN is connecting to \(serverInfo.server.name)")
+					#endif
+					status = .connection(.connecting(server: serverInfo.server, protocol: serverInfo.protocol))
+				} else {
+					status = .connection(.disconnected)
+				}
+
+			case .reasserting:
+				if let serverInfo = serverInfo {
+					#if DEBUG
+					print("🔄 [VPNManager] VPN is reconnecting to \(serverInfo.server.name)")
+					#endif
+					status = .connection(.reconnecting(server: serverInfo.server, protocol: serverInfo.protocol))
+				} else {
+					status = .connection(.disconnected)
+				}
+
+			case .disconnecting:
+				#if DEBUG
+				print("🔄 [VPNManager] VPN is disconnecting")
+				#endif
+				status = .connection(.disconnecting)
+
+			case .disconnected, .invalid:
+				#if DEBUG
+				print("❌ [VPNManager] VPN is disconnected")
+				#endif
+				status = .connection(.disconnected)
+
+			@unknown default:
+				#if DEBUG
+				print("⚠️ [VPNManager] Unknown VPN status")
+				#endif
+				status = .connection(.disconnected)
+			}
+		} catch {
+			#if DEBUG
+			print("❌ [VPNManager] Failed to load VPN preferences: \(error.localizedDescription)")
+			#endif
+			status = .idle
+		}
+	}
+
+	private func retrieveLastConnectedServer() -> (server: VPNClient.Server, protocol: VPNClient.`Protocol`)? {
+		guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) else {
+			#if DEBUG
+			print("❌ [VPNManager] Failed to access shared UserDefaults")
+			#endif
+			return nil
+		}
+
+		guard let encodedData = sharedDefaults.data(forKey: "current_server_details") else {
+			#if DEBUG
+			print("ℹ️ [VPNManager] No saved server details found")
+			#endif
+			return nil
+		}
+
+		guard let serverDetails = try? JSONDecoder().decode([String: String].self, from: encodedData) else {
+			#if DEBUG
+			print("❌ [VPNManager] Failed to decode server details")
+			#endif
+			return nil
+		}
+
+		guard let serverID = serverDetails["id"],
+			  let serverName = serverDetails["name"],
+			  let countryCode = serverDetails["countryCode"],
+			  let quality = serverDetails["quality"] else {
+			#if DEBUG
+			print("❌ [VPNManager] Incomplete server details")
+			#endif
+			return nil
+		}
+
+		// Reconstruct server object
+		let server = VPNClient.Server(
+			id: serverID,
+			name: serverName,
+			countryCode: countryCode,
+			quality: quality,
+			protocols: [String.openvpn, String.ikev2] // Default protocols
+		)
+
+		// Retrieve protocol from saved details, default to OpenVPN if not found
+		let protocolRawValue = serverDetails["protocol"] ?? String.openvpn
+		let protocolType: VPNClient.`Protocol`
+
+		// Match the raw value to the correct protocol type
+		switch protocolRawValue {
+		case String.openvpn:
+			protocolType = .openVPN
+		case String.ikev2:
+			protocolType = .ikev2
+		default:
+			protocolType = .openVPN // Default to OpenVPN
+		}
+
+		#if DEBUG
+		print("✅ [VPNManager] Retrieved server info: \(serverName), protocol: \(protocolType.name)")
+		#endif
+
+		return (server, protocolType)
 	}
 
 	private func createProvider(
