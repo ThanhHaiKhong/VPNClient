@@ -13,16 +13,18 @@ import NetworkExtension
 
 public actor VPNActor: Sendable {
 	private var manager: VPNManager?
+	private let defaultConfiguration: VPNClient.Configuration
 
-	public init() {
-		// Manager will be lazily initialized on first use
+	public init(configuration: VPNClient.Configuration? = nil) {
+		// Use provided configuration or fall back to reading from Info.plist
+		self.defaultConfiguration = configuration ?? VPNClient.Configuration.fromInfoPlist()
 	}
 
 	private func getManager() async -> VPNManager {
 		if let manager = manager {
 			return manager
 		}
-		let newManager = await VPNManager()
+		let newManager = await VPNManager(configuration: defaultConfiguration)
 		manager = newManager
 		return newManager
 	}
@@ -123,10 +125,14 @@ final internal class VPNManager: @unchecked Sendable {
 	private var currentProvider: (any SuperVPNKit.VPNProvider & Sendable)?
 	private var currentConnectionInfo: (server: VPNClient.Server, protocol: VPNClient.`Protocol`)?
 	private var connectionStartTime: Date?
-	private let appGroupIdentifier = "group.C77T3ALUS5.com.orlproducts.vpnpro"
-	private let bundleIdentifier = "com.orlproducts.vpnpro.extension"
+	private let appGroupIdentifier: String
+	private let bundleIdentifier: String
 
-	init() {
+	init(configuration: VPNClient.Configuration) {
+		// Extract configuration values
+		self.appGroupIdentifier = configuration.appGroup ?? "group.C77T3ALUS5.com.orlproducts.vpnpro"
+		self.bundleIdentifier = configuration.bundleIdentifier ?? "com.orlproducts.vpnpro.extension"
+
 		// Sync with system VPN status on initialization
 		Task { @MainActor in
 			await self.syncWithSystemStatus()

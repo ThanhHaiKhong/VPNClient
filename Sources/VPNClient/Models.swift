@@ -51,6 +51,18 @@ extension VPNClient {
 
 		// Configuration for WireGuard (can be extended later)
 		public static let wireGuard = Configuration()
+
+		/// Read VPN configuration from Info.plist
+		/// Keys: "VPNAppGroup" and "VPNBundleIdentifier"
+		public static func fromInfoPlist(bundle: Bundle = .main) -> Configuration {
+			let appGroup = bundle.object(forInfoDictionaryKey: "VPNAppGroup") as? String
+			let bundleIdentifier = bundle.object(forInfoDictionaryKey: "VPNBundleIdentifier") as? String
+
+			return Configuration(
+				appGroup: appGroup,
+				bundleIdentifier: bundleIdentifier
+			)
+		}
 	}
 }
 
