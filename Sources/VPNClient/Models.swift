@@ -16,10 +16,6 @@ extension VpnCoreKit.ServerInfo: @unchecked @retroactive Sendable {
 
 }
 
-extension VpnCoreKit.ServerInfo: @retroactive Identifiable {
-	// ServerInfo already has an 'id' property, so just declare conformance
-}
-
 // MARK: - Configuration
 
 extension VPNClient {
