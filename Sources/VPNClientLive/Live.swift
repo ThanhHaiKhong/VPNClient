@@ -50,6 +50,9 @@ extension VPNClient: DependencyKey {
 			},
 			connectionStats: {
 				await vpnActor.connectionStats()
+			},
+			lastestConnectionStats: {
+				await vpnActor.lastestConnectionStats()
 			}
 		)
 	}()

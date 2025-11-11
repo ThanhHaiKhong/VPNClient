@@ -47,4 +47,6 @@ public struct VPNClient: Sendable {
 	/// Stream of real-time connection statistics (bytes sent/received, connection duration, etc.)
 	/// Updates automatically while connected
 	public var connectionStats: @Sendable () async -> AsyncStream<VPNClient.ConnectionStats> = { AsyncStream { _ in } }
+	
+	public var lastestConnectionStats: @Sendable () async -> VPNClient.ConnectionStats? = { nil }
 }

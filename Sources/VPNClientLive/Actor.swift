@@ -94,6 +94,11 @@ public actor VPNActor: Sendable {
 		let manager = await getManager()
 		return await manager.connectionStatsStream()
 	}
+	
+	public func lastestConnectionStats() async -> VPNClient.ConnectionStats? {
+		let manager = await getManager()
+		return await manager.getLastestConnectionStats()
+	}
 }
 
 @MainActor
@@ -125,6 +130,7 @@ final internal class VPNManager: @unchecked Sendable {
 	private var currentProvider: (any SuperVPNKit.VPNProvider & Sendable)?
 	private var currentConnectionInfo: (server: VPNClient.Server, protocol: VPNClient.`Protocol`)?
 	private var connectionStartTime: Date?
+	private var lastestConnectionStats: VPNClient.ConnectionStats?
 	private let appGroupIdentifier: String
 	private let bundleIdentifier: String
 
@@ -273,45 +279,23 @@ final internal class VPNManager: @unchecked Sendable {
 	func currentProtocol() async -> VPNClient.`Protocol`? {
 		currentConnectionInfo?.protocol
 	}
+	
+	func getLastestConnectionStats() async -> VPNClient.ConnectionStats? {
+		lastestConnectionStats
+	}
 
 	func connectionStatsStream() -> AsyncStream<VPNClient.ConnectionStats> {
 		AsyncStream { continuation in
-			#if DEBUG
-			print("📊 [VPNManager] connectionStatsStream created")
-			#endif
-
 			let task = Task { @MainActor in
 				// Update interval: 1 second for smooth real-time updates
 				let updateInterval: UInt64 = 1_000_000_000 // 1 second in nanoseconds
 
-				#if DEBUG
-				print("📊 [VPNManager] Starting stats stream loop")
-				#endif
-
 				while !Task.isCancelled {
-					#if DEBUG
-					print("📊 [VPNManager] Stats stream tick - connectionStartTime: \(self.connectionStartTime != nil), currentProvider: \(self.currentProvider != nil), isConnected: \(self.status.isConnected)")
-					#endif
-
 					// Only yield stats if we're connected
 					if let startTime = self.connectionStartTime,
 					   let provider = self.currentProvider,
 					   self.status.isConnected {
-
-						#if DEBUG
-						print("📊 [VPNManager] All conditions met, calling getDataCount()")
-						#endif
-
 						let dataCount = provider.getDataCount()
-
-						#if DEBUG
-						if let dataCount = dataCount {
-							print("📊 [VPNManager] Data count from provider: received=\(dataCount.received), sent=\(dataCount.sent)")
-						} else {
-							print("⚠️ [VPNManager] Data count is nil - provider.getDataCount() returned nil")
-						}
-						#endif
-
 						let bytesSent = dataCount?.sent ?? 0
 						let bytesReceived = dataCount?.received ?? 0
 
@@ -320,16 +304,8 @@ final internal class VPNManager: @unchecked Sendable {
 							bytesReceived: bytesReceived,
 							connectedAt: startTime
 						)
-
-						#if DEBUG
-						print("📊 [VPNManager] Yielding stats: sent=\(bytesSent), received=\(bytesReceived)")
-						#endif
-
+						self.lastestConnectionStats = stats
 						continuation.yield(stats)
-					} else {
-						#if DEBUG
-						print("⚠️ [VPNManager] Conditions not met - skipping stats update")
-						#endif
 					}
 
 					// Wait before next update
@@ -338,9 +314,6 @@ final internal class VPNManager: @unchecked Sendable {
 			}
 
 			continuation.onTermination = { _ in
-				#if DEBUG
-				print("📊 [VPNManager] Stats stream terminated")
-				#endif
 				task.cancel()
 			}
 		}
