@@ -53,6 +53,9 @@ extension VPNClient: DependencyKey {
 			},
 			lastestConnectionStats: {
 				await vpnActor.lastestConnectionStats()
+			},
+			serverDetails: { server, `protocol` in
+				try await vpnActor.serverDetails(server,`protocol`)
 			}
 		)
 	}()

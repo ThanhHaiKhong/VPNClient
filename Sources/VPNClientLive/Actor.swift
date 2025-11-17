@@ -99,6 +99,14 @@ public actor VPNActor: Sendable {
 		let manager = await getManager()
 		return await manager.getLastestConnectionStats()
 	}
+	
+	public func serverDetails(
+		_ server: VPNClient.Server,
+		_ protocol: VPNClient.`Protocol`
+	) async throws -> VPNClient.ServerDetails? {
+		let manager = await getManager()
+		return try await manager.serverConfiguration(serverID: server.id, protocol: `protocol`)
+	}
 }
 
 @MainActor
@@ -503,7 +511,7 @@ final internal class VPNManager: @unchecked Sendable {
 		}
 	}
 	
-	private func serverConfiguration(
+	public func serverConfiguration(
 		serverID: String,
 		protocol: VPNClient.`Protocol`
 	) async throws -> VpnCoreKit.ServerConfiguration {

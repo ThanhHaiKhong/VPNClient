@@ -10,6 +10,7 @@ import SwiftUI
 
 extension VPNClient {
 	public typealias Server = VpnCoreKit.ServerInfo
+	public typealias ServerDetails = VpnCoreKit.ServerConfiguration
 }
 
 extension VpnCoreKit.ServerInfo: @unchecked @retroactive Sendable {

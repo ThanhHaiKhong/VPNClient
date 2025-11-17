@@ -49,4 +49,6 @@ public struct VPNClient: Sendable {
 	public var connectionStats: @Sendable () async -> AsyncStream<VPNClient.ConnectionStats> = { AsyncStream { _ in } }
 	
 	public var lastestConnectionStats: @Sendable () async -> VPNClient.ConnectionStats? = { nil }
+	
+	public var serverDetails: @Sendable (_ server: VPNClient.Server, _ protocol: VPNClient.`Protocol`) async throws -> VPNClient.ServerDetails? = { _, _ in nil }
 }
